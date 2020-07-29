@@ -24,8 +24,6 @@ import time                                                     #Libreria de tie
 from picamera.array import PiRGBArray                          
 from picamera import PiCamera                                   #Libreria oficial de camara para RPi
 
-#arduino = serial.Serial('/dev/ttyUSB0', 115200)                #El ESP32 esta conectado en el puerto USB1 y configurado a 115200 baudios
-
 db = mysql.connector.connect(                                   #Datos para ingresar a la base de datos Roller
     host="192.168.22.14",
     user="user",
@@ -45,8 +43,9 @@ q = GPIO.input(20)                                              #Seudonimo de la
 time.sleep(0.1)
 
 areaCuero = 45.00                                               #Area promedio del cuero en sqft
-utlMeta = 55.00                                                 #Utilizacion meta, (PROVISIONAL)
+utlMeta = 5.00                                                 #Utilizacion meta, (PROVISIONAL)
 utl = 0.00                                                      #Utilizacion inicial (RECURSO PARA CALCULOS)
+GPIO.output(21, True)
 
 #arduino.write(b"S1*")
 
@@ -57,13 +56,28 @@ def set_controls(camera):
     except Exception as e:
         print(e)
         print("The camera may not support this control.")
+    try:
+        time.sleep(2)
+        print("Setting the exposure...")
+        camera.set_control(v4l2.V4L2_CID_EXPOSURE, 10)
+        time.sleep(2)
+        print("Setting the exposure...")
+        camera.set_control(v4l2.V4L2_CID_EXPOSURE, 100)
+        time.sleep(2)
+        print("Setting the hflip...")
+        camera.set_control(v4l2.V4L2_CID_HFLIP, 1)
+        time.sleep(2)
+        
+    except Exception as e:
+        print(e)
+        print("The camera may not support this control.")
 
-def resize(frame, dst_width=640):
+def resize(frame, dst_width = 1080):          #2336, 1920
     height = frame.shape[0]
     width = frame.shape[1]
 
     scale = (dst_width * 1.0) / width
-    return cv2.resize(frame, (int(scale * width), int(scale * height)))
+    return cv2.resize(frame, (int(scale * width), int(scale * height))) 
 
 ##########    
 def orden(lista):
@@ -83,6 +97,7 @@ if __name__ == "__main__":
         print("Setting the mode...")
         camera.set_mode(2)
         fmt = camera.get_format()
+        #fmt = camera.set_resolution(1920, 1920)
         fmt = (fmt["width"], fmt["height"])
         print("Current resolution is {}".format(fmt))
         set_controls(camera)
@@ -112,12 +127,7 @@ prtx = []                                                                       
 pastx = []                                                                      #PasadoX, arreglo de apoyo para actualizar los arucos vistos
 
 while(True):
-    
-    """cap = PiCamera()
-    cap.resolution = (640, 480)
-    cap.framerate = 32"""
-                       
-    while True:    
+    while True:
         print("Espera...")
         time.sleep(0.1)
         ##Nueva camara
@@ -131,7 +141,7 @@ while(True):
         ##Nueva camara
         gray = cv2.cvtColor(videoframe, cv2.COLOR_BGR2GRAY)
         aruco_dict = aruco.Dictionary_get(aruco.DICT_6X6_250)
-        parameters =  aruco.DetectorParameters_create()
+        parameters =  aruco.DetectorParameters_create()no 
         corners, ids, rejectedImgPoints = aruco.detectMarkers(gray, aruco_dict, parameters=parameters)
         frame_markers = aruco.drawDetectedMarkers(videoframe.copy(), corners, ids)
         cv2.imshow("frame_markers", frame_markers)
@@ -271,8 +281,10 @@ while(True):
                 break
             
             cam = cam1[0] + cam2[0]                                                 #si el resultado de esta suma es 0, ninguna camara ve algun aruco, si es 1 alguna esta viendo arucos
-            if cam == 0 :                                                                                   #si el resultado de la suma es 0 
-                pass
+            if cam == 0 :  
+                cursor.execute("select max(cycle) from corte")
+                cicloNuevo = cursor.fetchone()
+                ciclo = cicloNuevo[0] + 1                                                                                 #si el resultado de la suma es 0 
         ##############################################DEBUG-GPIO##############################
         #Validacion con boton
         def record():
@@ -296,10 +308,10 @@ while(True):
                 db.commit() 
                 y = len(ids)                                                    #la variable y toma el valor de la longitud de ids
                 x = ids                                                         #x es un array con los valores de ids
-                prtx = orden(x)                                                 #el array x se convierte en un array de enteros, sigue con el mismo nombre
+                prtx = orden(x)                                                   #el array x se convierte en un array de enteros, sigue con el mismo nombre
 
                 for w in range (0,y):                                                                                                           #ciclo for de 0 hasta la cantidad de arucos presentes, detectados en ids
-                    n = int(x[w])                                                                                                               #n toma el valor de uno de los elementos del arreglo x, el elemento con la posicion del ciclo actual del for
+                    n = int(x[w])                                 #n toma el valor de uno de los elementos del arreglo x, el elemento con la posicion del ciclo actual del for
                     for i in range(retries): 
                         try:
                             cursor.execute("SELECT * FROM record WHERE aruco = "+comilla+str(n)+comilla+" AND cycle ="+comilla+str(ciclo)+comilla)       #se toma la fila de la tabla corte en donde la columna aruco tenga el valor de n y la columna cycle tenga el valor de ciclo
@@ -322,18 +334,28 @@ while(True):
                         cursor.execute(sql_insert, (n, visto[0], ciclo))                                #En aruco sera el valor n, en sqft sera el primer elemento del arreglo visto y el valor de ciclo
                         db.commit()
                 
-                cursor.execute("select sum(sqft) from record")
+                cursor.execute("select sum(sqft) from record where cycle = "+str(ciclo))
                 piesaje = cursor.fetchone()
                 db.commit()
 
                 return piesaje[0]
-            
-        if GPIO.input(26):
-            print ("Utilizacion: "+str(record()))
-            time.sleep(2)
-            GPIO.output(21, False)
-            time.sleep(2)
-            GPIO.output(21, True)
+        
+        try:        
+            if GPIO.input(26):
+                utl = record()
+                print(utl)
+                if utl > 5.0:
+                    time.sleep(2)
+                    print("Meta superada")
+                    GPIO.output(21, False)
+                    time.sleep(10)
+                else:
+                    print("No es la meta!")
+                    time.sleep(2)
+                    GPIO.output(21, False)
+                GPIO.output(21, True)
+        except:
+            print("Ningun dado")
         else:
             print("Boton sin presionar")
             
