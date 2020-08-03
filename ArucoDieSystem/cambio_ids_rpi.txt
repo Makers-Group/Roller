@@ -1,0 +1,24 @@
+Pasos:
+    1. abrir la terminal y escribir: sudo su
+    2. escribir: nano /etc/network/interfaces
+    3. Encontraras 4 lineas comentadas. debajo de estas lineas escribir lo siguiente (recuerda respetar los interlineados)
+        source-directory /etc/network/interfaces.d          NOTA : es posible que esa linea ya este escrita, de ser asi, no la escribas mas
+
+        auto lo
+        iface lo inet loopback
+        iface eth0 inet dhcp
+
+        auto wlan0
+        allow-hotplug wlan0
+        iface wlan0 inet static
+            address (Aqui insertas la direccion IP que quieres)
+            netmask (Aqui insertas la NETMASK, usualmente es 255.255.255.0, pero es mejor preguntar)
+            gateway (Aqui insertas el gateway)
+            wpa-passphrase (Aqui pones la password de la red, para SaltilloCutting es S1lt3ll4c)
+            wpa-ssid (Aqui pones el nombre de la red)
+
+    4. Oprimes Ctrl+O para guardar los cambios (<-- letra o) 
+    5. Oprimes Ctrl+x para salir
+    6. escribir: reboot   (La rasp se reiniciara)
+    7. Una vez reiniciada, abre una terminal y escribe: hostname -IP
+       Si te arroja la IP que querias, todo esta bien, en caso de que no, revisa que hayas escrito todo correctamente y que los parametros de la red sean correctos
