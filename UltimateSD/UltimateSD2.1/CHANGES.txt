@@ -1,0 +1,9 @@
+2.1 (07-05-2018)
+  * Agrega función de sobreescribir
+
+2.0 (04-12-2017)
+  * Agrega leerContenido
+  * Agrega invocación a inicializar() en métodos de Lara
+
+1.0 (31-08-2017)
+  * Primera versión estable
