@@ -10,11 +10,16 @@
 #include <Wire.h>
 
 // REPLACE WITH THE MAC Address of your receiver 
-
-uint8_t newMACAddress[] = {0x24, 0x6F, 0x28, 0xAD, 0xE6, 0xD0};
+uint8_t newMACAddress[] = {0x32, 0xAE, 0xA4, 0x07, 0x0D, 0x66};//master id =2
+//uint8_t newMACAddress[] = {0x24, 0x6F, 0x28, 0xAD, 0xE6, 0xD0};
 uint8_t broadcastAddress[] = {0xFC, 0xF5, 0xC4, 0x0E, 0xE1, 0x88};//1 24:6F:28:AD:E6:D0
 //uint8_t broadcastAddress[] = {0x24, 0x6F, 0x28, 0xAD, 0xE6, 0xD0};//3
 // Define variables to store BME280 readings to be sent
+
+#define llave 18
+#define boton 19
+#define pinComand 21
+
 bool block=false;
 bool serial=false;
 bool question=false;
@@ -30,6 +35,9 @@ String valor="";
 bool incomingBlock;
 bool incomingBypass;
 int incomingCounter;
+long incomingVerify;
+long y;
+bool check;
 
 // Variable to store if sending data was successful
 String success;
@@ -40,6 +48,9 @@ typedef struct struct_message {
     bool block;
     bool bypass;
     int counter;
+    int id;
+    long verify;
+    long y;
 } struct_message;
 
 // Create a struct_message called ESPReadings to hold sensor readings
@@ -68,15 +79,17 @@ void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
   incomingBlock = incomingReadings.block;
   incomingBypass = incomingReadings.bypass;
   incomingCounter = incomingReadings.counter;
+  incomingVerify = incomingReadings.verify;
   //incomingTemp = incomingReadings.temp;
   //incomingHum = incomingReadings.hum;
   //incomingPres = incomingReadings.pres;
-  if(serial)Serial.println("block :"+String(incomingBlock)+" Bypass: "+String(incomingBypass)+" Counter: "+String(incomingCounter));
+  if(serial)Serial.println("block :"+String(incomingBlock)+" Bypass: "+String(incomingBypass)+" Counter: "+String(incomingCounter)+"x: "+String(incomingVerify));
 }
  
 void setup() {
-  pinMode(27,OUTPUT);
-  pinMode(26,INPUT);
+  pinMode(llave,OUTPUT);
+  pinMode(boton,OUTPUT);
+  pinMode(pinComand,INPUT);
   
   // Init Serial Monitor
   Serial.begin(115200);
@@ -84,13 +97,13 @@ void setup() {
   // Set device as a Wi-Fi Station
   WiFi.mode(WIFI_STA);
 
-  //Serial.print("[OLD] ESP32 Board MAC Address:  ");
-  //Serial.println(WiFi.macAddress());
+  Serial.print("[OLD] ESP32 Board MAC Address:  ");
+  Serial.println(WiFi.macAddress());
   
   esp_wifi_set_mac(ESP_IF_WIFI_STA, &newMACAddress[0]);
   
-  //Serial.print("[NEW] ESP32 Board MAC Address:  ");
-  //Serial.println(WiFi.macAddress());
+  Serial.print("[NEW] ESP32 Board MAC Address:  ");
+  Serial.println(WiFi.macAddress());
 
   // Init ESP-NOW
   if (esp_now_init() != ESP_OK) {
@@ -132,27 +145,38 @@ void loop()
         if(serial)Serial.println("<<----------------------------");
         if(serial)Serial.print("A recibida: ");
         block=true;
-        //digitalWrite(27,HIGH);
         if(serial)Serial.println(block);
         break;
-      case 'B':     //pass
+      case 'B':     
         if(serial)Serial.println("<<----------------------------");
         if(serial)Serial.print("B recibida: ");
         block=false;
-        //digitalWrite(27,LOW);
+        y=incomingVerify;
         if(serial)Serial.println(block);
         break;
-      case 'Q':     //pass
+      case 'Q':     
         if(serial)Serial.println("<<----------------------------");
         if(serial)Serial.print("Q recibida: ");
         question=true;
         break; 
-      case 'S':     //pass
+      case 'S':     
         Serial.println("<<----------------------------");
         Serial.print("B recibida: ");
         if(valor=="1"){serial=true;Serial.println("Impresion serial activado");}
         if(valor=="0"){serial=false;Serial.println("Impresion serial desactivada");}
-        break;       
+        break;
+      case 'E':     
+        if(serial)Serial.println("<<----------------------------");
+        if(serial)Serial.print("E recibida: ");
+        check=true;
+        if(serial)Serial.println(check);
+        break;
+      case 'R':     
+        if(serial)Serial.println("<<----------------------------");
+        if(serial)Serial.print("R recibida: ");
+        Serial.println("Restarting in 10 seconds");
+        delay(10000);
+        ESP.restart();         
       default:
         Serial.println("variable desconocida");
       break;
@@ -173,23 +197,49 @@ void loop()
     Serial.println(b);
     question=false;
   }
+
+  
+    //if(serial)Serial.println("x: "+String(incomingVerify)+ "y: "+String(y));
+  char c;
+  if(incomingVerify > y)
+  {
+    c='a';
+    digitalWrite(boton,HIGH);
+  }
+  else if(incomingVerify==y)
+  {
+    c='b';
+    digitalWrite(boton,LOW);
+  }
+  else
+  {
+    y=incomingVerify;
+    c='c';
+    digitalWrite(boton,LOW);
+  }
+  if(check)
+  {  
+    Serial.println(c);
+    check=false;
+  }
   
   if(incomingBypass)
   {
-    digitalWrite(27,HIGH);
+    digitalWrite(llave,HIGH);
   }
   else 
   {
-    digitalWrite(27,LOW);
+    digitalWrite(llave,LOW);
   }
-/*
-  if(digitalRead(26))
+
+  if(digitalRead(pinComand))
   {
     block=true;
   }
   else
   {
     block=false;
+    y=incomingVerify;
   }
   //*/
   if(timeToSend<millis())
@@ -198,7 +248,10 @@ void loop()
     //Serial.println("Block: "+String(block));
     // Set values to send
     ESPReadings.block = block;
-  
+    ESPReadings.id = 1;
+    ESPReadings.y=y;
+    if(serial)Serial.println("valor enviado: "+ String(block));
+    if(serial)Serial.println("valor enviado Y: "+ String(y));
     // Send message via ESP-NOW
     esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *) &ESPReadings, sizeof(ESPReadings));
      
