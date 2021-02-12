@@ -15,7 +15,7 @@ BluetoothSerial SerialBT;
 Servo myservo;  // create servo object to control a servo
 
 int pos = 0;    // variable to store the servo position, Recommended PWM GPIO pins on the ESP32 include 2,4,12-19,21-23,25-27,32-33 
-int servoPin = 16;
+int servoPin = 32;
 #define boton 23
 #define WDT_TIMEOUT 3
 uint8_t servonum = 0;
@@ -68,6 +68,7 @@ void setup()
   Serial.println("Configuring WDT...");
   esp_task_wdt_init(WDT_TIMEOUT, true); //enable panic so ESP32 restarts
   esp_task_wdt_add(NULL); //add current thread to WDT watch
+  block=true;
 }
 
 void loop() 
