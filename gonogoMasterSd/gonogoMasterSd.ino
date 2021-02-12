@@ -301,9 +301,6 @@ void loop()
 
     huboReposo = false;
     huboGolpe = false; // para solo hacer estas acciones cada que un golpe es detectado
-    controlCabezal=false;
-    controlParo=false;
-    seleccionado=false;
     tiempoMillis=millis();
     Serial.println("<<<..................................................................>>>");
     
@@ -727,7 +724,6 @@ bool overWrite(String fileName, String file)
   {
     dataFile.print(file);
     dataFile.close();
-    //
     Serial.println(file);
     return true;
   }
@@ -846,46 +842,6 @@ String obtenerTexto(NexText nexEtiqueta)
   strcpy(arraux, buffer);
   String texto = (char*)buffer;
   return texto;
-}
-
-String getData(String fileName)
-{
-  String archivo;
-  File dataFile = SD.open(fileName);
-  //Serial.println("tamano: "+String(dataFile.size()));
-  long sizeFile=dataFile.size();
-  if (dataFile) 
-  {
-    for(int i=0;i<sizeFile;i++)
-    {
-      archivo = archivo+char(dataFile.read());
-    }
-    dataFile.close();
-    Serial.println("Datos de "+fileName+": "+ archivo);
-  }
-  else 
-  {
-    Serial.println("error opening "+fileName);
-  }
-  return archivo;
-}
-
-bool overWrite(String fileName, String file)
-{
-  SD.remove(fileName);
-  File dataFile = SD.open(fileName, FILE_WRITE);
-  if (dataFile) 
-  {
-    dataFile.print(file);
-    dataFile.close();
-    Serial.println(file);
-    return true;
-  }
-  else
-  {
-    Serial.println("Error sobreescribiendo "+ file);
-    return false;
-  }
 }
 
 String getCsvMaquina()
