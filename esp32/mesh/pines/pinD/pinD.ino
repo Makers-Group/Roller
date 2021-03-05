@@ -71,6 +71,7 @@ void setup() {
     controlVariable.toCharArray(variable,2);
     switch (variable[0]) 
     {
+      case 'A':
         if(from == anterior)
         {
           Serial.println("<<----------------------------");

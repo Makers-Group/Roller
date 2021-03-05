@@ -26,6 +26,7 @@ bool pulse=true;
 char variable[2]="";
 String raspi = "raspiB";
 String pres = "Z";
+String anterior;
 
 int buttonState;             // the current reading from the input pin
 int lastButtonState = LOW;   // the previous reading from the input pin
@@ -64,12 +65,16 @@ void setup() {
     controlVariable.toCharArray(variable,2);
     switch (variable[0]) 
     {
-      case 'A':     
-        Serial.println("<<----------------------------");
-        Serial.print("A recibida: ");
-        block=true;
-        digitalWrite(27,HIGH);
-        Serial.println(block);
+      case 'A':
+        if(from == anterior)
+        {     
+          Serial.println("<<----------------------------");
+          Serial.print("A recibida: ");
+          block=true;
+          digitalWrite(27,HIGH);
+          Serial.println(block);
+        }
+        else Serial.println("no me voy a bajar y mis webotes alv");
         break;
       case 'B':     //pass
         Serial.println("<<----------------------------");
@@ -77,6 +82,7 @@ void setup() {
         block=false;
         digitalWrite(27,LOW);
         Serial.println(block);
+        anterior = from;
         break; 
      case 'C':
         Serial.println("<<----------------------------");

@@ -5,7 +5,7 @@
 #include "FPS_GT511C3.h"
 #include "SoftwareSerial.h"
 /*
- Voltage Divider         <-> Fingerprint Scanner(Pin #) <-> Voltage Divider <-> 5V Arduino w/ Atmega328P
+ Voltage Divider         <->  (Pin #) <-> Voltage Divider <-> 5V Arduino w/ Atmega328P
                             <-> UART_TX (3.3V TTL) (Pin 1) <->                 <->       RX (pin 4)
   GND <-> 10kOhm <-> 10kOhm <-> UART_RX (3.3V TTL) (Pin 2) <->      10kOhm     <->       TX (pin 5)
           GND               <->        GND         (Pin 3) <->       GND       <->        GND
@@ -24,7 +24,7 @@ not forget to rewire the connection to the Arduino*/
 
 // FPS (TX) is connected to pin 10 (Arduino's Software RX)
 // FPS (RX) is connected through a converter to pin 11 (Arduino's Software TX)
-FPS_GT511C3 fps(10, 11); // (Arduino SS_RX = pin 10, Arduino SS_TX = pin 11)
+FPS_GT511C3 fps(11, 12); // (Arduino SS_RX = pin 11, Arduino SS_TX = pin 12)
 bool finger=false;
 String users;
 int userId;
@@ -32,6 +32,7 @@ bool parametro;
 bool fingerFound;
 String userName ="";
 bool approval;
+const char mesas[]={'A','B','C','D','E','F','G','H'};
 
 int interval=100;
 
@@ -103,10 +104,12 @@ NexText           rollerNo = NexText(1, 12, "roller");
 NexDSButton         statSd = NexDSButton(1, 13, "sdStat");
 NexDSButton       statMqtt = NexDSButton(1, 14, "mqttStat");
 NexDSButton       statWifi = NexDSButton(1, 15, "wifiStat");
+NexNumber    disablePinNex = NexNumber(1,17,"disable");
 //pagina razon
 NexNumber          nexMesa = NexNumber(2, 7, "mesa");
 NexNumber        nexMotivo = NexNumber(2, 8, "motivo");
 NexNumber      nexSolCorte = NexNumber(2, 9, "send");
+NexText        datosConcat = NexText(2,12, "concat"); 
 //pagina de huellaId
 NexPage       pageHuellaId = NexPage(3, 0, "page3");
 //permitiendo corte
@@ -143,12 +146,13 @@ uint32_t mesa=0;
 uint32_t motivo=0;
 uint32_t registro=0;
 uint32_t confirmar=0;
-
+uint32_t disablePin=0;
 
 void setup() 
 {
   Serial3.begin(115200);
   Serial.begin(115200);
+  Serial1.begin(115200);
   nexInit();
   Serial.println("->Iniciando");
   Serial.println("->Configurando salidas y entradas");
@@ -198,22 +202,10 @@ void setup()
   digitalWrite(10,LOW);
   delay(30);
   digitalWrite(10,HIGH);
-  attachInterrupt(0, escucharGolpes, RISING);
-  users = getData("users.txt");  
-  /*dataFile = SD.open("users.txt", FILE_WRITE);
-  if (dataFile) 
-  {
-    errorSd=false;
-    dataFile.println("0000Gabriel_Ramirez,");
-    dataFile.close();
-  }
-  else 
-  {
-    Serial.println("error opening datalog.txt");
-    errorSd=true;
-  }*/
+  //users = getData("users.txt");  
   fps.Open();         //send serial command to initialize fps
   fps.SetLED(true);   //turn on LED so fps can see fingerprint
+  attachInterrupt(0, escucharGolpes, RISING);
   progreso.setValue(70);
   delay(500);
   progreso.setValue(100);
@@ -227,6 +219,7 @@ void loop()
   solPermision=0;
   registro=0;
   confirmar=0;
+  disablePin=0;
   // sets huboReposo to true, to avoid sending hits when the machine is stoped
   long microSeconds = micros() / 1000;
   if( (tiempoUltimoGolpe + 90000) < microSeconds)
@@ -238,8 +231,10 @@ void loop()
   {
     if(espWifi==0)
     {
+      statWifi.setValue(0);
       if(espMqtt==0)
       {
+        statMqtt.setValue(0);
         Serial.println(">>>>Conectado<<<<<");
         lastMillis = millis();
         sendFloatEsp('a',golpesPorMin);
@@ -271,9 +266,17 @@ void loop()
         sendLongEsp('n',tiempoTranscurrido);
         delay(interval);
       }
-      else Serial.println("Waiting for mqtt conection");  
+      else 
+      {
+        Serial.println("Waiting for mqtt conection");
+        statMqtt.setValue(1);  
+      }
     }
-    else Serial.println("waiting for wifi conection");
+    else 
+    {
+      Serial.println("waiting for wifi conection");
+      statWifi.setValue(1);
+    }
     tiempo = millis(); 
   }
   if (millis() - timeoutEsp > 180000) 
@@ -289,7 +292,6 @@ void loop()
   }
   if (huboGolpe) 
   { //únicamente si se detecta un golpe las lecturas serán grabadas
-   
     Serial.println("<<<..................................................................>>>"); 
     Serial.print(F("Cuenta perpetua:  "));
     Serial.println(cuentaPerpetua);
@@ -303,7 +305,6 @@ void loop()
     huboGolpe = false; // para solo hacer estas acciones cada que un golpe es detectado
     tiempoMillis=millis();
     Serial.println("<<<..................................................................>>>");
-    
   } 
 
   int paroActivo=digitalRead(3);
@@ -329,18 +330,16 @@ void loop()
   long cuentaCabezal=cuentaPerpetua-memoriaGolpes;
   Serial.println("cuenta perpetua: "+String(cuentaPerpetua));
   Serial.println("cuenta sensor:   "+String(cuentaSensor));
-  //Serial.println("reinicios:       "+String(reinicios));
-  //Serial.println("calidad:         "+String(quality));
   Serial.println("inicio:          "+String(inicio));
   Serial.println("........................................................................");
-  Serial.println("          ..................................................");
-  Serial.println("");
 
   if (esperaConexion < millis())
   {
     guardarSD();
-    esperaConexion = millis() + 15000; //tiempo de espera para enviar datos cada 15s
+    esperaConexion = millis() + 60000; //tiempo de 1min para guardar datos
   }
+  if(errorSd)statSd.setValue(1);
+  else statSd.setValue(0);
   //Bloque de comandos seriales, realiza la lectura de comandos seriales
   //---------------------------------------------------------------------------------------------------------------------------
   if(Serial.available())
@@ -411,7 +410,7 @@ void loop()
       break;
     }
   }
-  //Bloque de comandos seriales, realiza la lectura de comandos seriales del ESP32
+  //Bloque de comandos seriales, realiza la lectura de comandos seriales del ESP32 mqtt
   //---------------------------------------------------------------------------------------------------------------------------
   if(Serial3.available())
   {
@@ -487,12 +486,22 @@ void loop()
       break;
     }
   }
+  disablePinNex.getValue(&disablePin);
+  if(disablePin==2)
+  {
+    disablePinNex.setValue(0);
+  }
   //Bloque de solicitud de corte, realiza la verificacion de id para permitir un corte fuera de utilizacion 
-  //-----------------------------------------------------------------------------------------------------------------------------------------------  
+  //---------------------------------------------------------------------------------------------------------------------------
   nexSolCorte.getValue(&solPermision);
   if(solPermision==1)
   {
     Serial.print("solicitud de corte ");
+    String stringConcat=obtenerTexto(datosConcat);
+    String mesa1=stringConcat.substring(0,1);
+    String motivo1=stringConcat.substring(1,2);
+    Serial.println("mesa1:"+mesa1+" motivo1:"+motivo1);
+    //enviarDatosTexto("","",datosConcat);
     nexMesa.getValue(&mesa);
     nexMotivo.getValue(&motivo);
     Serial.println("mesa:"+String(mesa)+" motivo:"+String(motivo));
@@ -508,6 +517,10 @@ void loop()
     {
       Serial.println("Aprobado");
       pagePermitir.show();
+      //String buss=String(mesa)+","+String(motivo);
+      Serial.println(String(mesa)+String(motivo));
+      //sendStringEspMesh(mesas[mesa-1],String(motivo));
+      sendStringEspMesh(mesa1,motivo1);
     }
     if(approval==0)
     {
@@ -795,7 +808,6 @@ String getUserName(int userId,String usersDb)
       Serial.println(usuario);
       return usuario;
     }
-  
 }
 
 String fillZero(String userId)
@@ -846,7 +858,8 @@ String obtenerTexto(NexText nexEtiqueta)
 
 String getCsvMaquina()
 {
-  String tupla = String(tiempo)+","+
+  String tupla = getFecha()+"|"+","+
+                 String(tiempo)+","+
                  String(golpesPorMin)+"," +
                  String(cuentaPerpetua)+","+
                  String(tiempoTranscurrido);
@@ -921,18 +934,6 @@ float getVelocidad(unsigned long tiempoEntreGolpes)
   return suma / muestras;
 }
 
-
-bool timeYetSD(unsigned long intervalo)
-{
-  //Serial.println(String(millis())+"----"+String(tiempoSD));
-  if (millis() > tiempoSD)
-  {
-    tiempoSD = millis() + intervalo;
-    return true;
-  }
-  return false;
-}
-
 void sendFloatEsp(char label,float var)
 {
   String buss="";
@@ -961,4 +962,22 @@ void sendStringEsp(char label,String var)
   //Serial.println("enviando: "+buss);
   buss.toCharArray(buff,20);
   Serial3.write(buff);
+}
+void sendStringEspMesh(String label,String var)
+{
+  String buss="";
+  char buff[20];
+  buss=label+var+"*";
+  Serial.println("enviando: "+buss);
+  buss.toCharArray(buff,20);
+  Serial1.write(buff);
+}
+String getFecha()
+{
+  NexRtc  rtc;
+  uint8_t time_buf[30] = {0};
+  String str;
+  rtc.read_rtc_time(time_buf, 30);
+  str = (char*)time_buf;
+  return str;
 }

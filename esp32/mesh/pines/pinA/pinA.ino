@@ -28,6 +28,7 @@ char variable[2]="";
 String raspiA = "raspiA";
 String raspiH = "raspiH";
 String pres = "Z";
+String anterior ;
 
 int buttonStateA;             // the current reading from the input pin
 int lastButtonStateA = LOW;   // the previous reading from the input pin
@@ -70,12 +71,16 @@ void setup() {
     controlVariable.toCharArray(variable,2);
     switch (variable[0]) 
     {
-      case 'A':     
-        Serial.println("<<----------------------------");
-        Serial.print("A recibida: ");
-        block=true;
-        digitalWrite(27,HIGH);
-        Serial.println(block);
+      case 'A':
+        if(from == anterior)
+        {     
+          Serial.println("<<----------------------------");
+          Serial.print("A recibida: ");
+          block=true;
+          digitalWrite(27,HIGH);
+          Serial.println(block);
+        }
+        else Serial.println("no me voy a bajar y mis webotes alv");
         break;
       case 'B':     //pass
         Serial.println("<<----------------------------");
@@ -83,12 +88,13 @@ void setup() {
         block=false;
         digitalWrite(27,LOW);
         Serial.println(block);
+        anterior = from;
         break; 
      case 'D':
         Serial.println("<<----------------------------");
         Serial.print("D recibida: "); 
         mesh.sendSingle(raspiA, pres);
-    case 'E':
+     case 'E':
         Serial.println("<<----------------------------");
         Serial.print("E recibida: "); 
         mesh.sendSingle(raspiH, pres);
