@@ -23,6 +23,10 @@ String pinF = "pinF";
 String bajar = String("B");
 String subir = String("A");
 
+String raspiMaster="master";
+String nodeId="3";
+long timeToSend;
+
 void setup() {
   Serial.begin(115200);
 
@@ -43,6 +47,11 @@ void setup() {
 }
 
 void loop() {
+  if(timeToSend<millis())
+  {
+    mesh.sendSingle(raspiMaster, nodeId);
+    timeToSend+=30000;
+  }
   if (Serial.available()){
     mensaje=Serial.readStringUntil('*');
     String controlVariable=mensaje.substring(0,1);

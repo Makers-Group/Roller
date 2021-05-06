@@ -4,6 +4,7 @@
 #include <SD.h>
 #include "FPS_GT511C3.h"
 #include "SoftwareSerial.h"
+#include "avr/wdt.h"
 /*
  Voltage Divider         <->  (Pin #) <-> Voltage Divider <-> 5V Arduino w/ Atmega328P
                             <-> UART_TX (3.3V TTL) (Pin 1) <->                 <->       RX (pin 4)
@@ -24,6 +25,9 @@ not forget to rewire the connection to the Arduino*/
 
 // FPS (TX) is connected to pin 10 (Arduino's Software RX)
 // FPS (RX) is connected through a converter to pin 11 (Arduino's Software TX)
+
+#define resetEspApi 40
+
 FPS_GT511C3 fps(11, 12); // (Arduino SS_RX = pin 11, Arduino SS_TX = pin 12)
 bool finger=false;
 String users;
@@ -42,6 +46,11 @@ float velocidad [10]; // global para que se guarde la información al salir de l
 String mensaje="";
 char variable[2]="";
 String valor="";
+
+int nodesState[14];
+String stringNodes="";
+String stringRoller="";
+long timeToSend=0;
 
 String ssid ="";//"SaltilloCutting"; // your network SSID (name)
 String pass ="";//"S1lt3ll4c";       // your network password
@@ -77,6 +86,8 @@ bool errorMqtt=false;
 bool errorSd=false;
 bool reinicio=false;
 
+bool reposoFlag=false;
+
 int espWifi=1;
 int espMqtt=1;
 
@@ -87,6 +98,7 @@ unsigned long tiempoSD = 180000;
 unsigned long tiempoParo = 0;
 unsigned long tiempoMillis = 0;
 unsigned long timeoutEsp=0;
+unsigned long timeoutConexionEsp=0;
 
 const int timeThreshold = 5000;
 long startTime = 0;
@@ -104,7 +116,7 @@ NexText           rollerNo = NexText(1, 12, "roller");
 NexDSButton         statSd = NexDSButton(1, 13, "sdStat");
 NexDSButton       statMqtt = NexDSButton(1, 14, "mqttStat");
 NexDSButton       statWifi = NexDSButton(1, 15, "wifiStat");
-NexNumber    disablePinNex = NexNumber(1,17,"disable");
+//NexNumber    disablePinNex = NexNumber(1,17,"disable");
 //pagina razon
 NexNumber          nexMesa = NexNumber(2, 7, "mesa");
 NexNumber        nexMotivo = NexNumber(2, 8, "motivo");
@@ -138,6 +150,11 @@ NexNumber     nexConfirmar = NexNumber(12, 6, "aceptUser");
 NexPage   pageRegistroExitoso = NexPage(14, 0, "page13");
 //error inesperado
 NexPage   pageError = NexPage(16, 0, "page14");
+//nodeStatus
+NexText   nodesStatNext= NexText(17,16,"nodesState");
+//pagina de comandos
+NexNumber  nexMasterCmd = NexNumber(18,4,"masterComand");
+NexText   comandNextText = NexText(18,3,"pinesState");
 
 char buffer[100] = {0};
 uint32_t razon=0;
@@ -146,13 +163,16 @@ uint32_t mesa=0;
 uint32_t motivo=0;
 uint32_t registro=0;
 uint32_t confirmar=0;
-uint32_t disablePin=0;
+//uint32_t disablePin=0;
+uint32_t comand=0;
 
 void setup() 
 {
+  wdt_disable();
   Serial3.begin(115200);
   Serial.begin(115200);
   Serial1.begin(115200);
+  Serial1.setTimeout(500);
   nexInit();
   Serial.println("->Iniciando");
   Serial.println("->Configurando salidas y entradas");
@@ -164,7 +184,13 @@ void setup()
   digitalWrite(49,HIGH);
   pinMode(10,OUTPUT);
   digitalWrite(10,HIGH);
-  delay(24);
+  pinMode(resetEspApi,OUTPUT);
+  digitalWrite(resetEspApi,LOW);
+  delay(10);
+  digitalWrite(resetEspApi,HIGH);
+  delay(10);
+  digitalWrite(resetEspApi,LOW);
+  delay(1000);
   if (!SD.begin(ssSD)) 
   {
     Serial.println("Card failed, or not present");
@@ -212,25 +238,39 @@ void setup()
   delay(500);
   Serial.println("->Inicio exitoso");
   principal.show();
+  wdt_enable(WDTO_4S);
 }
 
 void loop() 
 {
+  wdt_reset();
   solPermision=0;
   registro=0;
   confirmar=0;
-  disablePin=0;
+  //disablePin=0;
+  comand=0;
   // sets huboReposo to true, to avoid sending hits when the machine is stoped
+  if(timeToSend<millis())
+  {
+    sendTextNext(stringNodes,nodesStatNext);
+    timeToSend+=3000;
+  }
   long microSeconds = micros() / 1000;
   if( (tiempoUltimoGolpe + 90000) < microSeconds)
   {
     huboReposo=true;
+    if(!reposoFlag)
+    {
+      guardarSD();
+      reposoFlag=true;
+    }
   }
   // send a message roughly every second to esp32.
   if (millis() - lastMillis > 1000) 
   {
     if(espWifi==0)
     {
+      timeoutConexionEsp=millis();
       statWifi.setValue(0);
       if(espMqtt==0)
       {
@@ -251,10 +291,10 @@ void loop()
         delay(interval);
         sendLongEsp('g',reinicio);
         delay(interval);
-        //sendStringEsp('h',modelo);
-        //delay(interval);
-        //sendStringEsp('i',pines);
-        //delay(interval);
+        sendStringEsp('h',stringNodes);//anteriormente este es modelo
+        delay(interval);
+        sendStringEsp('i',stringRoller);//anteriormente este es pines
+        delay(interval);
         //sendStringEsp('j',plates);
         //delay(interval);
         sendLongEsp('k',memoriaGolpes);
@@ -283,12 +323,12 @@ void loop()
   {
     espWifi=1;
     espMqtt=1;
-    Serial.println("->Reiniciando ESP");  
-    delay(10);
-    digitalWrite(10,LOW);
-    delay(30);
-    digitalWrite(10,HIGH);
+    espReset();
     timeoutEsp=millis(); 
+  }
+  if(millis()-timeoutConexionEsp >300000)//5 min en milisegundos
+  {
+    espReset();
   }
   if (huboGolpe) 
   { //únicamente si se detecta un golpe las lecturas serán grabadas
@@ -303,6 +343,7 @@ void loop()
 
     huboReposo = false;
     huboGolpe = false; // para solo hacer estas acciones cada que un golpe es detectado
+    reposoFlag=false;
     tiempoMillis=millis();
     Serial.println("<<<..................................................................>>>");
   } 
@@ -331,18 +372,19 @@ void loop()
   Serial.println("cuenta perpetua: "+String(cuentaPerpetua));
   Serial.println("cuenta sensor:   "+String(cuentaSensor));
   Serial.println("inicio:          "+String(inicio));
-  Serial.println("........................................................................");
 
-  if (esperaConexion < millis())
+  if(!huboReposo)
   {
-    guardarSD();
-    esperaConexion = millis() + 60000; //tiempo de 1min para guardar datos
+    if (esperaConexion < millis())
+    {
+      guardarSD();
+      esperaConexion = millis() + 60000; //tiempo de 1min para guardar datos
+    }
   }
+
   if(errorSd)statSd.setValue(1);
   else statSd.setValue(0);
-  //Bloque de comandos seriales, realiza la lectura de comandos seriales
-  //---------------------------------------------------------------------------------------------------------------------------
-  if(Serial.available())
+  if(Serial.available()) //Realiza la lectura de comandos seriales del PC
   {
     mensaje=Serial.readStringUntil('*');
     Serial.println("");
@@ -367,6 +409,7 @@ void loop()
         Serial.print("Verify: ");
         while(!finger)
         {
+          wdt_reset();
           identify();
         }
         finger=false;
@@ -380,6 +423,7 @@ void loop()
         {
           while(!finger)
           {
+            wdt_reset();
             fingerFound=identify();
           }
           finger=false;
@@ -393,6 +437,7 @@ void loop()
           Serial.println("ingrese nombre");
           while(Serial.available()==0)
           {
+            wdt_reset();
             Serial.println("esperando serial");
           }
           if(Serial.available())
@@ -410,13 +455,38 @@ void loop()
       break;
     }
   }
-  //Bloque de comandos seriales, realiza la lectura de comandos seriales del ESP32 mqtt
-  //---------------------------------------------------------------------------------------------------------------------------
-  if(Serial3.available())
+  if(Serial1.available())//Realiza la lectura de comandos seriales del ESP32 API REST
+  {
+    mensaje=Serial1.readStringUntil('*');
+    Serial.println("datos mesh: "+String(mensaje));
+    String controlVariable=mensaje.substring(0,1);
+    controlVariable.toCharArray(variable,2);
+    valor=mensaje.substring(1);
+    switch (variable[0]) 
+    {
+      case 'A':     //ssid
+        stringNodes=valor;
+        Serial.println("longitud: "+String(valor.length())+":"+valor);
+        for(int i=0;i<=valor.length();i++)
+        {
+          String nodo = valor.substring(i,i+1);
+          nodesState[i]=nodo.toInt();
+          Serial.print("-"+String(nodesState[i]));
+        }
+        Serial.println("");
+        break;
+      case 'B':
+        stringRoller=valor;
+        Serial.println("estado de la roller:"+stringRoller);
+      default:
+        Serial.println("variable desconocida serial 1");
+      break;
+    }
+  } 
+  if(Serial3.available())//Realiza la lectura de comandos seriales del ESP32 mqtt
   {
     mensaje=Serial3.readStringUntil('*');
-    Serial.println("");
-    Serial.println("datos recibidos: "+String(mensaje));
+    Serial.println("datos recibidos mqtt: "+String(mensaje));
     String controlVariable=mensaje.substring(0,1);
     controlVariable.toCharArray(variable,2);
     valor=mensaje.substring(1);
@@ -482,17 +552,19 @@ void loop()
         delay(interval);
         break;        
       default:
-        Serial.println("variable desconocida");
+        Serial.println("variable desconocida Serial 3");
       break;
     }
   }
-  disablePinNex.getValue(&disablePin);
-  if(disablePin==2)
+  nexMasterCmd.getValue(&comand);
+  if(comand==2)
   {
-    disablePinNex.setValue(0);
+    Serial.println("comando pines");
+    nexMasterCmd.setValue(0);
+    //String comando=obtenerTexto(comandNextText);
+    sendStringEspMesh("X",obtenerTexto(comandNextText));
   }
-  //Bloque de solicitud de corte, realiza la verificacion de id para permitir un corte fuera de utilizacion 
-  //---------------------------------------------------------------------------------------------------------------------------
+
   nexSolCorte.getValue(&solPermision);
   if(solPermision==1)
   {
@@ -509,6 +581,7 @@ void loop()
     pageHuellaId.show();
     while(!finger)
     {
+       wdt_reset();
        approval=identify();
        Serial.println(String(approval));
     }
@@ -538,6 +611,7 @@ void loop()
     nexRegistro.setValue(0);      
     while(!finger)
     {
+      wdt_reset();
       fingerFound=identify();
     }
     finger=false;   
@@ -547,6 +621,7 @@ void loop()
       Serial.println("ingrese nombre");
       while(confirmar==0)
       {
+        wdt_reset();
         Serial.println("Esperando datos");
         nexConfirmar.getValue(&confirmar);
       }
@@ -564,6 +639,7 @@ void loop()
       pageUserRegis.show();
     }
   }  
+  Serial.println("........................................................................");
 }
 
 void escucharGolpes() 
@@ -602,6 +678,7 @@ int Enroll(bool param,int id)
     usedid = true;
     while (usedid == true)  //identifica el siguiente id vacio
     {
+      wdt_reset();
       usedid = fps.CheckEnrolled(enrollid);
       if (usedid==true) enrollid++;
     }
@@ -616,7 +693,7 @@ int Enroll(bool param,int id)
   Serial.print("Press finger to Enroll #");
   Serial.println(enrollid);
   pagePonerDedo.show();
-  while(fps.IsPressFinger() == false) delay(100);
+  while(fps.IsPressFinger() == false) {wdt_reset();delay(100);}
   bool bret = fps.CaptureFinger(true);
   int iret = 0;
   if (bret != false)
@@ -624,20 +701,20 @@ int Enroll(bool param,int id)
     Serial.println("Remove finger");
     pageQuitarDedo.show();
     fps.Enroll1(); 
-    while(fps.IsPressFinger() == true) delay(100);
+    while(fps.IsPressFinger() == true) {wdt_reset();delay(100);}
     Serial.println("Press same finger again");
     pagePonerDedo.show();
-    while(fps.IsPressFinger() == false) delay(100);
+    while(fps.IsPressFinger() == false) {wdt_reset();delay(100);}
     bret = fps.CaptureFinger(true);
     if (bret != false)
     {
       Serial.println("Remove finger");
       pageQuitarDedo.show();
       fps.Enroll2();
-      while(fps.IsPressFinger() == true) delay(100);
+      while(fps.IsPressFinger() == true) {wdt_reset();delay(100);}
       Serial.println("Press same finger yet again");
       pagePonerDedo.show();
-      while(fps.IsPressFinger() == false) delay(100);
+      while(fps.IsPressFinger() == false) {wdt_reset();delay(100);}
       bret = fps.CaptureFinger(true);
       if (bret != false)
       {
@@ -845,6 +922,17 @@ void enviarDatosTexto(String texto, char caracter[5], NexText etiqueta)
   etiqueta.setText(buffer);
 }
 
+void sendTextNext(String texto, NexText etiqueta)
+{
+  String aux;
+  aux = texto;
+  char arraux[25] = {0};
+  aux.toCharArray(arraux, 25);
+  memset(buffer, 0, sizeof(buffer));
+  strcpy(buffer, arraux);
+  etiqueta.setText(buffer);
+}
+
 String obtenerTexto(NexText nexEtiqueta)
 {
   char buffer[100] = {0};
@@ -980,4 +1068,13 @@ String getFecha()
   rtc.read_rtc_time(time_buf, 30);
   str = (char*)time_buf;
   return str;
+}
+
+void espReset()
+{
+    Serial.println("->Reiniciando ESP");  
+    delay(10);
+    digitalWrite(10,LOW);
+    delay(30);
+    digitalWrite(10,HIGH);
 }

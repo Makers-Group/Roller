@@ -26,6 +26,10 @@ String subir = String("A");
 bool estado = false;
 bool cambio = false;
 
+String raspiMaster="master";
+String nodeId="5";
+long timeToSend;
+
 void setup() {
   Serial.begin(115200);
 
@@ -47,6 +51,11 @@ void setup() {
 }
 
 void loop() {
+  if(timeToSend<millis())
+  {
+    mesh.sendSingle(raspiMaster, nodeId);
+    timeToSend+=30000;
+  }
   if (Serial.available()){
     mensaje=Serial.readStringUntil('*');
     String controlVariable=mensaje.substring(0,1);

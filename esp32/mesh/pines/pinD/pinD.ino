@@ -41,6 +41,10 @@ int lastButtonStateE = LOW;   // the previous reading from the input pin
 
 String nodeName = "pinD"; // Name needs to be unique
 
+String raspiMaster="master";
+String nodeId="11";
+long timeToSend;
+
 void setup() {
   Serial.begin(115200);
   pinMode(botonD, INPUT);
@@ -110,6 +114,11 @@ void setup() {
 }
 
 void loop() {
+  if(timeToSend<millis())
+  {
+    mesh.sendSingle(raspiMaster, nodeId);
+    timeToSend+=30000;
+  }
   if (Serial.available()){
     mensaje=Serial.readStringUntil('*');
     String controlVariable=mensaje.substring(0,1);

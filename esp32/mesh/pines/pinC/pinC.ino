@@ -12,6 +12,7 @@
 #define   MESH_PORT       5555
 #define   boton           4
 
+
 Scheduler     userScheduler; // to control your personal task
 Servo myservo;  // create servo object to control a servo
 namedMesh  mesh;
@@ -35,6 +36,10 @@ unsigned long debounceDelay = 100;    // the debounce time; increase if the outp
 int counter = 0;
 
 String nodeName = "pinC"; // Name needs to be unique
+
+String raspiMaster="master";
+String nodeId="10";
+long timeToSend;
 
 void setup() {
   Serial.begin(115200);
@@ -100,6 +105,11 @@ void setup() {
 }
 
 void loop() {
+  if(timeToSend<millis())
+  {
+    mesh.sendSingle(raspiMaster, nodeId);
+    timeToSend+=30000;
+  }
   if (Serial.available()){
     mensaje=Serial.readStringUntil('*');
     String controlVariable=mensaje.substring(0,1);
