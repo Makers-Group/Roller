@@ -186,10 +186,6 @@ void setup()
   digitalWrite(10,HIGH);
   pinMode(resetEspApi,OUTPUT);
   digitalWrite(resetEspApi,LOW);
-  delay(10);
-  digitalWrite(resetEspApi,HIGH);
-  delay(10);
-  digitalWrite(resetEspApi,LOW);
   delay(1000);
   if (!SD.begin(ssSD)) 
   {
@@ -228,6 +224,10 @@ void setup()
   digitalWrite(10,LOW);
   delay(30);
   digitalWrite(10,HIGH);
+  delay(10);
+  digitalWrite(resetEspApi,HIGH);
+  delay(10);
+  digitalWrite(resetEspApi,LOW);
   //users = getData("users.txt");  
   fps.Open();         //send serial command to initialize fps
   fps.SetLED(true);   //turn on LED so fps can see fingerprint
@@ -467,7 +467,7 @@ void loop()
       case 'A':     //ssid
         stringNodes=valor;
         Serial.println("longitud: "+String(valor.length())+":"+valor);
-        for(int i=0;i<=valor.length();i++)
+        for(int i=0;i<valor.length();i++)
         {
           String nodo = valor.substring(i,i+1);
           nodesState[i]=nodo.toInt();

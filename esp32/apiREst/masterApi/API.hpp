@@ -7,15 +7,51 @@ long  clientTime[22]={0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 bool clientState[22]={0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 const char* PARAM_FILTER = "filter";
 
+const char index2_html[] PROGMEM = R"rawliteral(
+
+<!DOCTYPE HTML><html>
+<head>
+  <title>PTS rol 1</title>
+  <meta charset="utf-8" content="width=device-width, initial-scale=1">
+  <style>
+    html {font-family: Arial; display: inline-block; text-align: center;}
+    h2 {font-size: 3.0rem;}
+    p {font-size: 3.0rem;}
+    body {max-width: 600px; margin:0px auto; padding-bottom: 25px;}
+  </style>
+</head>
+<body style="background-color:black;">
+  <h2 style="color:Lime;">Estado</h2>
+  <p style="color:MintCream;">Estado de roller CDEF</p>
+  <p style="color:MintCream;">
+
+)rawliteral";
+
+const char medio[] PROGMEM = R"rawliteral(
+</p>
+<p style="color:MintCream;">Estado de clientes CDEF</p>
+<p style="color:MintCream;">
+
+)rawliteral";
+const char cierre[] PROGMEM = R"rawliteral(
+</p>
+</body>
+</html>
+
+)rawliteral";
+
 void getAll(AsyncWebServerRequest *request)
 {
   String message = "";
+  String message2="";
   for(int i=0;i<22;i++)
   {
     message=message+String(roller1[i]);
+    message2=message2+String(clientState[i]);
   }
   Serial.println(message);
-  request->send(200, "text/plain", message);
+  //request->send(200, "text/plain", message);
+  request->send(200, "text/html",index2_html+message+medio+message2+cierre );
 }
 
 void getFiltered(AsyncWebServerRequest *request)

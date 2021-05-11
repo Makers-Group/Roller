@@ -87,11 +87,11 @@ void setup()
   myservo.setPeriodHertz(50);    // standard 50 hz servo
   myservo.attach(servoPin, 900, 2100); // attaches the servo on pin 18 to the servo object
   Serial.println("Desbloqueando...");
-  //for( int angle =180; angle>0; angle -=1)
-  //{
-    //delay(10);
-    myservo.write(0);
-  //}
+  for( int angle =180; angle>0; angle -=1)
+  {
+    delay(10);
+    myservo.write(angle);
+  }
 }
 
 void loop() 

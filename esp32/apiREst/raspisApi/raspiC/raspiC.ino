@@ -92,7 +92,7 @@ void loop()
         ReplaceById(bc,"0");
         break; 
       default:
-        Serial.println("variable desconocida");
+        //Serial.println("variable desconocida");
       break;
    }
  }

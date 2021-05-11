@@ -1,7 +1,28 @@
 AsyncWebServer server(80);
+const char index_html[] PROGMEM = R"rawliteral(
+
+<!DOCTYPE HTML><html>
+<head>
+  <title>PTS rol 1</title>
+  <meta charset="utf-8" content="width=device-width, initial-scale=1">
+  <style>
+    html {font-family: Arial; display: inline-block; text-align: center;}
+    h2 {font-size: 3.0rem;}
+    p {font-size: 3.0rem;}
+    body {max-width: 600px; margin:0px auto; padding-bottom: 25px;}
+  </style>
+</head>
+<body style="background-color:black;">
+  <h2 style="color:Lime;">Servidor de roller 1</h2>
+  <p style="color:MintCream;">Este es el servicio de la api rest que conecta a la roller 1 mesa CDEF</p>
+</body>
+</html>
+
+)rawliteral";//*/
+
 
 void homeRequest(AsyncWebServerRequest *request) {
-  request->send(200, "text/plain", "Roller 1 server");
+  request->send(200, "text/html", index_html);//"Roller 1 server"
 }
 
 void notFound(AsyncWebServerRequest *request) {
